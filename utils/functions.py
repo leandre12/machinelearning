@@ -6,6 +6,7 @@ import pandas as pd
 from scipy.cluster.hierarchy import dendrogram
 import os
 from datetime import *
+from sklearn.cluster import KMeans
 
 def _scale_data(data, ranges):
     (x1, x2) = ranges[0]
@@ -227,20 +228,19 @@ def getCategoriesGroup(cat_dict,cat_name):
 
 def rfm_level_type1(df):
     if df['rfm_concat_score'] == '444':
-        return 'Best Customers'
-    elif ((df['f_score'] == 4) and (df['m_score'] != 4)):
-        return 'Loyal Customers'
-    elif (df['m_score'] == 4):
-        return 'Big Spenders'
-    elif (df['r_score'] <= 2):
-        return 'Almost Lost'
-    elif ((df['r_score'] == 1) and (df['f_score'] >= 1) and (df['m_score'] >= 1)):
-        return 'Lost Customers'
+        return 'Meilleurs clients'
     elif df['rfm_concat_score'] == '111':
-        return 'Lost Cheap Customers'    
+        return 'Clients bon marché perdus'    
+    elif ((df['f_score'] == 4) and (df['m_score'] <= 3) and (df['r_score'] >= 3)):
+        return 'Clients fidèles'
+    elif (df['m_score'] > 3):
+        return 'Gros dépensiers'
+    elif (df['r_score'] <= 2):
+        return 'Presque perdus'
+    elif ((df['r_score'] == 1) and (df['f_score'] >= 1) and (df['m_score'] >= 1)):
+        return 'Clients perdus'
     else:
-        return 'Normal customers'
-    
+        return 'Autres clients'
    
     
 def rfm_level_type2(df):
@@ -258,3 +258,196 @@ def rfm_level_type2(df):
         return '4'
     else:
         return '3 -'
+
+def plotKmeansClustersWcss(data):
+    wcss = []
+    for k in range(1, 21):
+        kmeans = KMeans(n_clusters=k, init="k-means++")
+        kmeans.fit(data)
+        wcss.append(kmeans.inertia_)
+    plt.figure(figsize=(12, 6))
+    plt.grid()
+    plt.plot(range(1, 21), wcss, linewidth=2, color="red", marker ="8")
+    plt.xlabel("nombre des clusters")
+    plt.xticks(np.arange(1, 21, 1))
+    plt.ylabel("Somme moyenne des erreurs quadratiques")
+    plt.title('Clustering avec critère de coude')
+    plt.show()
+    
+def plotKmeansClusters(clusters_sample, X_tsne):
+    plt.figure(figsize=(15, 12))
+    plt.axis([np.min(X_tsne[:, 0] * 1.1), np.max(X_tsne[:, 0] * 1.1),
+              np.min(X_tsne[:, 1] * 1.1), np.max(X_tsne[:, 1] * 1.1)])
+
+    colors = ['royalblue', 'maroon', 'forestgreen', 'mediumorchid',
+              'tan', 'deeppink', 'olive', 'goldenrod', 'lightcyan',
+              'navy', 'gray', 'purple']
+
+    for i in range(len(np.unique(clusters_sample))):
+        idx = clusters_sample == i
+        plt.scatter(X_tsne[idx, 0], X_tsne[idx, 1], label=i, s=10, c=colors[i])
+        plt.title('T-SNE via k-means avec les variables de RFM')
+
+    plt.legend(loc='upper left', markerscale=2)
+    plt.show()
+
+# Fonction pour générer les données glissantes
+def createFeaturesCustomers(dataCustomer, startDate, endDate):
+    maxDuration = 20 - int(startDate.split()[1])
+    minDuration = 20 - int(endDate.split()[1])
+    dataframeCustomer = \
+        dataCustomer[(dataCustomer['duration_frequence_order']
+                      <= maxDuration)
+                     & (dataCustomer['duration_frequence_order']
+                        >= minDuration)]
+
+    return dataframeCustomer
+
+# Fonction pour générer les données glissantes V2
+def createFeaturesCustomersV2(AllData, startDate, endDate):
+
+    AllData = \
+    AllData[(AllData['order_purchase_timestamp']>=startDate)
+          & (AllData['order_purchase_timestamp']<=endDate)]
+    
+    
+    customers_copy = \
+        pd.read_csv('data/olist_customers_dataset.csv', sep=',', engine='python')
+    
+    # calcul de la durée de dernier achat :
+    AllDataRecenceByCustomer = \
+        AllData.groupby('customer_id')['order_purchase_timestamp']\
+        .max().reset_index(name='Last_order_date')
+    customers_Behaviour = pd.merge(customers_copy, AllDataRecenceByCustomer,
+                                   left_on='customer_id',
+                                   right_on='customer_id',
+                                   how='inner')
+
+    customers_Behaviour['max_date_order'] =\
+        AllData['order_purchase_timestamp'].max()
+    # Formater les dates pour faire les calculs
+    customers_Behaviour.max_date_order = customers_Behaviour.max_date_order\
+        .apply(lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))
+    customers_Behaviour.Last_order_date = customers_Behaviour.Last_order_date\
+        .apply(lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))
+
+    # calcul de la recence (en jour) :
+    customers_Behaviour['recency_order'] =\
+        (customers_Behaviour.max_date_order-customers_Behaviour.Last_order_date)
+    customers_Behaviour.recency_order = \
+        abs(customers_Behaviour.recency_order
+            .apply(lambda x: x.total_seconds()/86400)).astype(int)    
+    
+    # calcul de la fréquence d'achat :
+    AllDataFrequenceByCustomer =\
+        AllData.groupby('customer_id').size().reset_index(name='frequency_order')
+    customers_Behaviour =\
+        pd.merge(customers_Behaviour, AllDataFrequenceByCustomer,
+                 left_on='customer_id', right_on='customer_id', how='inner')
+    # customers_Behaviour.shape    
+    
+    
+    # calcul de la dépense du client :
+    AllDataAmountByCustomer =\
+        AllData.groupby('customer_id')['Total payment_value_Order']\
+        .sum().reset_index(name='monetary_amount_order')
+    customers_Behaviour =\
+        pd.merge(customers_Behaviour, AllDataAmountByCustomer,
+                 left_on='customer_id', right_on='customer_id', how='inner')
+
+    # calcul de nombre de mois de fréquence(durée arrondie en mois) :
+    FirstOrderByCustomer =\
+        AllData.groupby('customer_id')['order_purchase_timestamp']\
+        .min().reset_index(name='First_order_date')
+    customers_Behaviour =\
+        pd.merge(customers_Behaviour, FirstOrderByCustomer,
+                 left_on='customer_id', right_on='customer_id', how='inner')
+    customers_Behaviour.First_order_date = customers_Behaviour.First_order_date.\
+        apply(lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))
+
+    # calcul de nombre de mois de fréquence(durée arrondie en mois) :
+    customers_Behaviour['duration_frequence_order'] =\
+        (customers_Behaviour.max_date_order-customers_Behaviour.First_order_date)
+    customers_Behaviour.duration_frequence_order =\
+        abs(customers_Behaviour.duration_frequence_order
+            .apply(lambda x: x.total_seconds()/(86400*30))).astype(int)
+
+    customers_Behaviour.drop(columns=['Last_order_date',
+                                      'max_date_order',
+                                      'customer_zip_code_prefix'],
+                             inplace=True)    
+    
+    # calcul de panier moyen du client :
+    customers_Behaviour['mean_value_order'] =\
+        customers_Behaviour['monetary_amount_order']/customers_Behaviour['frequency_order']   
+    
+    # Calcul des moyennes de satisfactions du client
+    # sur l'ensemble de ses commandes :
+    AllDataReviewScoreByCustomer =\
+        AllData.groupby('customer_id')['review_score'].mean()\
+        .reset_index(name='review_score_order')
+    customers_Behaviour = pd.merge(customers_Behaviour,
+                                   AllDataReviewScoreByCustomer,
+                                   left_on='customer_id',
+                                   right_on='customer_id',
+                                   how='inner')    
+ 
+    # calcul des photos des produits achetés :
+    AllDataPhotosProductByCustomer =\
+        AllData.groupby('customer_id')['product_photos_qty'].sum()\
+        .reset_index(name='sum_product_photos_order')
+    customers_Behaviour =\
+        pd.merge(customers_Behaviour, AllDataPhotosProductByCustomer,
+                 left_on='customer_id', right_on='customer_id', how='inner')
+    # calcul de nombre de produits des produits achetés :
+    AllDataNbrProductsByCustomer =\
+        AllData.groupby('customer_id')['product_id'].size()\
+        .reset_index(name='nbr_products_customer')
+    customers_Behaviour =\
+        pd.merge(customers_Behaviour, AllDataNbrProductsByCustomer,
+                 left_on='customer_id', right_on='customer_id', how='inner')
+
+    # calcul de nombre des photos moyen par produit pour un consommateur :
+    customers_Behaviour['mean_number_photos'] = abs(
+        customers_Behaviour['sum_product_photos_order']
+        /
+        customers_Behaviour['nbr_products_customer']).astype(int)
+    customers_Behaviour.drop(columns=['sum_product_photos_order',
+                                      'nbr_products_customer'], inplace=True)
+    
+    # Calcul de nombre de type de paiement differents :
+    AllDataPaymentsTypeByCustomer =\
+        AllData.groupby(['customer_id',
+                         'order_id'])['nbrPaymentType']\
+        .max().reset_index(name='nbr_payments_type')
+    customers_Behaviour = pd.merge(customers_Behaviour,
+                                   AllDataPaymentsTypeByCustomer,
+                                   left_on='customer_id',
+                                   right_on='customer_id', how='inner')
+    # Suppression des colonnes non utilisées
+    customers_Behaviour.drop(columns=['customer_unique_id',
+                                      'customer_city',
+                                      'order_id',
+                                      'customer_state',
+                                      'First_order_date'
+                                     ], inplace=True)
+    
+    # Normalisation et standardisation des données :
+    customers_Behaviour_Log = customers_Behaviour.copy()
+    listVarDensite = ['recency_order', 'frequency_order',
+                      'monetary_amount_order',
+                      'duration_frequence_order', 'mean_value_order',
+                      'review_score_order', 'mean_number_photos',
+                      'nbr_payments_type']
+    for j, val in enumerate(listVarDensite):
+        # transformer les données pour le rendre normales
+        # Les variables qui ont un coeeficient de skewness > 2
+        if (customers_Behaviour_Log[val].skew() > 2):
+            customers_Behaviour_Log[val] =\
+                np.log(customers_Behaviour_Log[val] + 1)
+        else:
+            customers_Behaviour_Log[val] =\
+                customers_Behaviour_Log[val]
+        jmax = j
+    
+    return customers_Behaviour_Log

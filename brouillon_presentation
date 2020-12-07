@@ -1,0 +1,58 @@
+Olist est une entreprise bresilienne assez recente car elle a moins de 5 ans.
+Leurs activités sont orientées sur la marketplace comme font Amazon aux etats-unis ou leboncoin en France, 
+c'est à dire qu'elle sert d'intermediaire entre les vendeurs (pro ou particuliers) et les acheteurs(pro ou particuliers)
+
+Donc pour cela ils ont besoin de bien connaitre leurs clients et leurs vendeurs mais dans le cadre de notre étude, 
+on se focalisera un peu plus sur les clients.
+
+Mon objectif dans ce projet sera d'exploiter les données des clients afin de :
+- proposer une segmentation client exploitable et facile d'utilisation
+- évaluer le frequence necessaire pour MAJ les segmentations
+- respecter la convention PEP8 pour que les codes soit réutilisables par le client
+
+Concernant les données, nous avons des données anonymisées qui s'étalent de oct 2016 en oct 2018.
+Sur les 9 tables, on trouvera :
+- les informations clients et sa localisation, ...
+- les informations produits telles que sa categories, nombre des photos, dimensions, ...
+- les commandes des clients telles que la valeur, le frais de livraison, satisfaction, type de paiement ...
+- les vendeurs et la localisation
+
+Ces données ont besoin d'etre preparé avant de les appliqués sur notre algorithme
+Nettoyage de données 
+
+Une fois qu'on a toutes les variables interesantes, j'ai appliqué les preprocessing classique c'est la normalisation des variables et standardisation.
+
+pour les methodes utilisées, étant donnée que nous sommes sur un problème de segmentation pour un apprentissage non supervisée
+Nous allons voir d'abrod la methde RFM classqie puid lz methode k-means
+Dbscan temps de traitement trop long qui nous oblige à réduire les données à traiter 
+pour comparer la qualite de segmentation dans les differentes methodes, 
+nous vons 3 criteres : 
+Les deux premiers sont .. qui seront caracterisé par la metrique silhouette_score, c'est une valeur comprise
+le dernier mais pas moins important sera l'exploitabilit...., est ce que le cluster que nous avons identifié seront exploitable et interessant pour l'equipe marketing 
+
+
+POur la segmentation RFM classique, nosu avons 3 variables,... 
+A partir de ces variables nous allons leur attribuer des scores allant de 1 à 4 (1 sera le pire e 4 le meilleur)
+
+Puis après nous avons la methodes k-means, 
+C'est une methode basée sur les centroides et les calcul des distances ecludiennes entre les points, 
+l'idée est de definir d'abord le nombre de cluster et pour chaque cluster son centre de gravité
+par itération : placer toutes les données dans les centre les plus proches et recalculer les nouveaux centres
+on arrete quand la somme des moyennes des erreurs quadratiques est stable
+Puis on utilise le T-SNE qui est une 
+
+Apres on utilise toujours la même methode k-means mais avec des variables supplementaires, ...
+
+Et sur ce slide, on voit la repartition des variables pour les differents cluster, 
+
+Mais il reste quend même à étudier si notre modèle est stable dans le temps.
+cette stabilité se verifie avec la consistance des resultats de previsions
+
+POur cela nous avons mis en place de periode des données de reference ici en rouge
+et des periodes des données Glissantes.
+L'idée est en premier temps de faire une prevision...
+
+Sur ce slide, on voit la comparaison des resultats dans le temps
+
+
+Donc en conclusion, 
